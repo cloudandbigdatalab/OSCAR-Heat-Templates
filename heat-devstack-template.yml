@@ -32,11 +32,11 @@ resources:
   devstack_vm:
     type: OS::Nova::Server
     properties:
-      key_name: controller_key
-      image: "Ubuntu 14.04"
+      key_name: {get_param: keyname}
+      image: {get_param: image}
       flavor: m1.large
       networks:
-        - network: f4d567f8-5ead-46ab-b9e1-389d9115e7fe
+        - network: {get_param: network-uuid}
       user_data_format: RAW
       user_data:
         str_replace:
