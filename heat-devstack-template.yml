@@ -1,0 +1,88 @@
+heat_template_version: 2015-04-30
+
+description: A template that deploys devstack on one node
+
+parameters:
+
+  keyname:
+    type: string
+    label: Key name for ssh'ing into the VM
+    description: Key name for ssh'ing into the VM
+
+  image:
+    type: string
+    label: Image to use
+    description: The image to use for this devstack VM
+
+  network-uuid:
+    type: string
+    label: The network UUID
+    description: The network UUID of the private tenant network this VM will be on.
+
+resources:
+  building_devstack:
+    type: OS::Heat::WaitCondition
+    properties:
+      handle: {get_resource: wait_handle}
+      timeout: 2000
+  wait_handle:
+    type: OS::Heat::WaitConditionHandle
+
+  
+  devstack_vm:
+    type: OS::Nova::Server
+    properties:
+      key_name: controller_key
+      image: "Ubuntu 14.04"
+      flavor: m1.large
+      networks:
+        - network: f4d567f8-5ead-46ab-b9e1-389d9115e7fe
+      user_data_format: RAW
+      user_data:
+        str_replace:
+          template: |
+            #!/bin/bash
+            set -ex
+            logdir=/var/log/heat-deployments
+            prefix=${logdir}/devstack_user_data.log
+            mkdir -p $logdir
+            exec &> >(tee -a ${prefix}.log)
+            echo "This is a test. My variable is $some_variable"
+            apt-get update
+            apt-get install git vim ebtables -y
+            useradd stack -d /home/stack -s /bin/bash -g sudo
+            mkdir -p /home/stack
+            chown -R stack /home/stack
+            echo "# User rules for stack" >> /etc/sudoers.d/90-stack-user
+            echo "stack ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/90-stack-user
+            chmod 440 /etc/sudoers.d/90-stack-user
+            su stack
+            pushd /home/stack
+              git clone https://git.openstack.org/openstack-dev/devstack
+            popd
+            pushd /home/stack/devstack
+            cat <<end > local.conf
+            [[local|localrc]]
+            ADMIN_PASSWORD=secrete
+            DATABASE_PASSWORD=secrete
+            RABBIT_PASSWORD=secrete
+            SERVICE_PASSWORD=secrete
+            SERVICE_TOKEN=a682f596-76f3-11e3-b3b2-e716f9080d50
+            disable_service n-net
+            enable_service q-svc
+            enable_service q-dhcp
+            enable_service q-l3
+            enable_service q-agt
+            enable_service q-meta
+            disable_service zookeeper
+            #FIXED_RANGE=172.31.1.0/24
+            #FLOATING_RANGE=192.168.20.0/25
+            #HOST_IP=10.3.4.5
+            end
+            chown -R stack:root /home/stack/devstack/
+            su stack ./stack.sh
+            $wc_notify --data-binary '{"status": "SUCCESS"}'
+             
+          params:
+            $some_variable: "HELLO WORLD"
+            $wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
