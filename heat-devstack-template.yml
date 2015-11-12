@@ -81,6 +81,9 @@ resources:
             end
             chown -R stack:root /home/stack/devstack/
             su stack ./stack.sh
+            if [ $? -gt "0" ]; then
+              $wc_notify --data-binary '{"status": "FAILURE", "reason": "Devstack failed to build"}'
+            fi
             $wc_notify --data-binary '{"status": "SUCCESS"}'
              
           params:
